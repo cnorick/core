@@ -11,7 +11,7 @@ from music_assistant_client.exceptions import (
     InvalidServerVersion,
     MusicAssistantClientException,
 )
-from music_assistant_models.config_entries import PlayerConfig
+from music_assistant_models.config_entries import PlayerConfig, ProviderConfig
 from music_assistant_models.enums import EventType
 from music_assistant_models.errors import (
     ActionUnavailable,
@@ -38,6 +38,7 @@ from homeassistant.helpers.issue_registry import (
     async_create_issue,
     async_delete_issue,
 )
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import ATTR_CONF_EXPOSE_PLAYER_TO_HA, DOMAIN, LOGGER
 from .helpers import get_music_assistant_client, get_party_device_id
@@ -77,6 +78,7 @@ class MusicAssistantEntryData:
     discovered_players: set[str] = field(default_factory=set)
     platform_handlers: dict[Platform, PlayerAddCallback] = field(default_factory=dict)
     party_handlers: dict[Platform, Callable[[str], None]] = field(default_factory=dict)
+    party_config_coordinator: DataUpdateCoordinator[ProviderConfig | None] | None = None
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -273,13 +275,31 @@ async def async_setup_entry(  # noqa: C901
 
     party_mode_state = {"instance_id": party_instance_id}
 
-    def add_party_mode(instance_id: str) -> None:
+    async def _async_add_party_mode(instance_id: str, is_setup: bool = False) -> None:
         """Handle adding Party Mode as HA device + entities."""
+        if not entry.runtime_data.party_config_coordinator:
+
+            async def _update_party_config() -> ProviderConfig | None:
+                return await mass.config.get_provider_config(instance_id)
+
+            coordinator = DataUpdateCoordinator(
+                hass,
+                LOGGER,
+                config_entry=entry,
+                name="Party Mode Config",
+                update_method=_update_party_config,
+            )
+            entry.runtime_data.party_config_coordinator = coordinator
+            if is_setup:
+                await coordinator.async_config_entry_first_refresh()
+            else:
+                await coordinator.async_refresh()
+
         for callback in entry.runtime_data.party_handlers.values():
             callback(instance_id)
 
     if party_instance_id:
-        add_party_mode(party_instance_id)
+        await _async_add_party_mode(party_instance_id, is_setup=True)
 
     def handle_providers_updated(event: MassEvent) -> None:
         """Handle Mass Providers Updated event."""
@@ -296,7 +316,6 @@ async def async_setup_entry(  # noqa: C901
         if party_mode_state["instance_id"] != current_instance_id:
             old_instance_id = party_mode_state["instance_id"]
             party_mode_state["instance_id"] = current_instance_id
-
             if old_instance_id:
                 assert mass.server_info is not None
                 old_device_id = get_party_device_id(
@@ -313,7 +332,11 @@ async def async_setup_entry(  # noqa: C901
                             device.id, remove_config_entry_id=entry.entry_id
                         )
 
-            add_party_mode(current_instance_id)
+            if current_instance_id:
+                hass.async_create_task(_async_add_party_mode(current_instance_id))
+        elif current_instance_id:
+            if coordinator := entry.runtime_data.party_config_coordinator:
+                hass.async_create_task(coordinator.async_request_refresh())
 
     entry.async_on_unload(
         mass.subscribe(handle_providers_updated, EventType.PROVIDERS_UPDATED)

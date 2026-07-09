@@ -1,17 +1,21 @@
 """Music Assistant Number platform."""
 
-from typing import Final, override
+from typing import Any, Final, override
 
 from music_assistant_client.client import MusicAssistantClient
 from music_assistant_models.player import PlayerOption, PlayerOptionType
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
-from homeassistant.const import Platform
+from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import MusicAssistantConfigEntry
-from .entity import MusicAssistantPlayerOptionEntity
+from .const import LOGGER
+from .entity import (
+    MusicAssistantPartyModeConfigEntity,
+    MusicAssistantPlayerOptionEntity,
+)
 from .helpers import catch_musicassistant_error
 
 PLAYER_OPTIONS_NUMBER: Final[dict[str, bool]] = {
@@ -25,6 +29,15 @@ PLAYER_OPTIONS_NUMBER: Final[dict[str, bool]] = {
     "equalizer_mid": False,
     "subwoofer_volume": True,
     "treble": True,
+}
+
+PARTY_MODE_NUMBERS = {
+    "add_to_queue_limit": (5, 50, EntityCategory.CONFIG),
+    "add_to_queue_refill_minutes": (1, 30, EntityCategory.CONFIG),
+    "boost_limit": (1, 10, EntityCategory.CONFIG),
+    "boost_refill_minutes": (5, 120, EntityCategory.CONFIG),
+    "skip_song_limit": (1, 5, EntityCategory.CONFIG),
+    "skip_song_refill_minutes": (15, 180, EntityCategory.CONFIG),
 }
 
 
@@ -75,6 +88,40 @@ async def async_setup_entry(
     # register callback to add players when they are discovered
     entry.runtime_data.platform_handlers.setdefault(Platform.NUMBER, add_player)
 
+    def add_party_mode(instance_id: str) -> None:
+        async def _add_entities() -> None:
+            entities: list[MusicAssistantPartyModeNumber] = []
+            if party_config := await mass.config.get_provider_config(instance_id):
+                for number_key, (
+                    min_val,
+                    max_val,
+                    category,
+                ) in PARTY_MODE_NUMBERS.items():
+                    if number_key not in party_config.values:
+                        continue
+
+                    entities.append(
+                        MusicAssistantPartyModeNumber(
+                            mass,
+                            entry.runtime_data.party_config_coordinator,
+                            instance_id,
+                            config_key=number_key,
+                            entity_description=NumberEntityDescription(
+                                key=number_key,
+                                translation_key=f"party_mode_{number_key}",
+                                native_min_value=min_val,
+                                native_max_value=max_val,
+                                native_step=1,
+                                entity_category=category,
+                            ),
+                        )
+                    )
+            async_add_entities(entities)
+
+        hass.create_task(_add_entities())
+
+    entry.runtime_data.party_handlers.setdefault(Platform.NUMBER, add_party_mode)
+
 
 class MusicAssistantPlayerConfigNumber(MusicAssistantPlayerOptionEntity, NumberEntity):
     """Representation of a Number entity to control player settings."""
@@ -116,4 +163,61 @@ class MusicAssistantPlayerConfigNumber(MusicAssistantPlayerOptionEntity, NumberE
             player_option.value
             if isinstance(player_option.value, (int, float))
             else None
+        )
+
+
+class MusicAssistantPartyModeNumber(MusicAssistantPartyModeConfigEntity, NumberEntity):
+    """Representation of a Number entity to control party mode settings."""
+
+    def __init__(
+        self,
+        mass: MusicAssistantClient,
+        coordinator: Any,
+        instance_id: str,
+        config_key: str,
+        entity_description: NumberEntityDescription,
+    ) -> None:
+        """Initialize."""
+        super().__init__(
+            mass=mass,
+            coordinator=coordinator,
+            instance_id=instance_id,
+            unique_id_suffix=config_key,
+        )
+        self.config_key = config_key
+        self.entity_description = entity_description
+        self._attr_native_value = None
+
+    @override
+    def _handle_coordinator_update(self) -> None:
+        """Update number state."""
+        if not (party_config := self.coordinator.data):
+            self._attr_available = False
+            super()._handle_coordinator_update()
+            return
+
+        try:
+            value = party_config.get_value(self.config_key)
+            if isinstance(value, (int, float, str)):
+                self._attr_native_value = float(value)
+            self._attr_available = True
+        except Exception as err:  # noqa: BLE001
+            LOGGER.debug("Error in number update: %s", err)
+            self._attr_available = False
+
+        super()._handle_coordinator_update()
+
+    @catch_musicassistant_error
+    @override
+    async def async_set_native_value(self, value: float) -> None:
+        """Update the current value."""
+        LOGGER.debug(
+            "Setting number %s to %s for %s", self.config_key, value, self.instance_id
+        )
+        self._attr_native_value = value
+        self.async_write_ha_state()
+        await self.mass.config.save_provider_config(
+            provider_domain="party",
+            instance_id=self.instance_id,
+            values={self.config_key: int(value)},
         )
