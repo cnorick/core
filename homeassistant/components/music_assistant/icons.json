@@ -9,6 +9,11 @@
       "party_mode_qr": {
         "default": "mdi:qrcode"
       }
+    },
+    "sensor": {
+      "party_mode_url": {
+        "default": "mdi:link"
+      }
     }
   },
   "services": {
