@@ -30,6 +30,17 @@
         "default": "mdi:timer"
       }
     },
+    "select": {
+      "party_mode_boost_badge_color": {
+        "default": "mdi:palette"
+      },
+      "party_mode_party_player": {
+        "default": "mdi:speaker-multiple"
+      },
+      "party_mode_request_badge_color": {
+        "default": "mdi:palette"
+      }
+    },
     "sensor": {
       "party_mode_url": {
         "default": "mdi:link"

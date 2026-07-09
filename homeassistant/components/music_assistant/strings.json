@@ -210,6 +210,47 @@
           "standard": "Standard"
         }
       },
+      "party_mode_boost_badge_color": {
+        "name": "Boost badge color",
+        "state": {
+          "00bcd4": "Cyan",
+          "2d6a4f": "Green (Dark)",
+          "3f51b5": "Indigo",
+          "4caf50": "Green (Light)",
+          "8bc34a": "Lime",
+          "9c27b0": "Purple",
+          "673ab7": "Deep Purple",
+          "009688": "Teal",
+          "b55522": "Orange",
+          "e64a19": "Deep Orange",
+          "e91e63": "Magenta",
+          "f06292": "Pink",
+          "ffc107": "Amber",
+          "ffeb3b": "Yellow"
+        }
+      },
+      "party_mode_party_player": {
+        "name": "Party player"
+      },
+      "party_mode_request_badge_color": {
+        "name": "Request badge color",
+        "state": {
+          "00bcd4": "Cyan",
+          "2d6a4f": "Green (Dark)",
+          "3f51b5": "Indigo",
+          "4caf50": "Green (Light)",
+          "8bc34a": "Lime",
+          "9c27b0": "Purple",
+          "673ab7": "Deep Purple",
+          "009688": "Teal",
+          "b55522": "Orange",
+          "e64a19": "Deep Orange",
+          "e91e63": "Magenta",
+          "f06292": "Pink",
+          "ffc107": "Amber",
+          "ffeb3b": "Yellow"
+        }
+      },
       "sleep": {
         "name": "Sleep timer",
         "state": {
