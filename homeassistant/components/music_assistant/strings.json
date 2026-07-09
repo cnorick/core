@@ -309,6 +309,42 @@
       "party_mode": {
         "name": "Party mode"
       },
+      "party_mode_anti_burn_in": {
+        "name": "Anti burn-in"
+      },
+      "party_mode_display_lyrics": {
+        "name": "Display lyrics"
+      },
+      "party_mode_enable_add_queue": {
+        "name": "Enable guest add to queue"
+      },
+      "party_mode_enable_boost": {
+        "name": "Enable guest boost"
+      },
+      "party_mode_enable_guest_access": {
+        "name": "Enable guest access"
+      },
+      "party_mode_enable_rate_limiting": {
+        "name": "Enable rate limiting"
+      },
+      "party_mode_enable_skip_song": {
+        "name": "Enable skip song"
+      },
+      "party_mode_hide_back_button": {
+        "name": "Hide back button"
+      },
+      "party_mode_highlight_ahead": {
+        "name": "Highlight ahead"
+      },
+      "party_mode_karaoke_mode": {
+        "name": "Karaoke mode"
+      },
+      "party_mode_prevent_duplicate_tracks": {
+        "name": "Prevent duplicate tracks"
+      },
+      "party_mode_show_progress_bar": {
+        "name": "Show progress bar"
+      },
       "pure_direct": {
         "name": "Pure direct"
       },
