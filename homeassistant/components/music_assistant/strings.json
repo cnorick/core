@@ -361,6 +361,12 @@
     "text": {
       "network_name": {
         "name": "Network name"
+      },
+      "party_mode_party_name": {
+        "name": "Party name"
+      },
+      "party_mode_qr_text": {
+        "name": "QR text"
       }
     }
   },
