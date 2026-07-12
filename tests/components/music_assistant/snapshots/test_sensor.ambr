@@ -32,7 +32,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'party_mode_url',
-    'unique_id': 'party_instance_party_mode_url',
+    'unique_id': '1234_party_instance_party_mode_url',
     'unit_of_measurement': None,
   })
 # ---
