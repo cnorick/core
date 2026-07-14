@@ -226,6 +226,11 @@
         }
       }
     },
+    "sensor": {
+      "party_mode_url": {
+        "name": "Guest URL"
+      }
+    },
     "switch": {
       "adaptive_drc": {
         "name": "Adaptive DRC"
