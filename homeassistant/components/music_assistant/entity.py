@@ -9,12 +9,17 @@ from music_assistant_models.player import Player, PlayerOption
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .const import DOMAIN
 from .helpers import get_party_device_id, get_party_device_info
 
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
+    from music_assistant_models.config_entries import ProviderConfig
 
 
 class MusicAssistantEntity(Entity):
@@ -180,3 +185,36 @@ class MusicAssistantPartyModeEntity(Entity):
 
     async def async_on_update(self) -> None:
         """Handle provider updates."""
+
+
+class MusicAssistantPartyModeConfigEntity(
+    CoordinatorEntity[DataUpdateCoordinator["ProviderConfig"]],
+):
+    """Base Entity for Music Assistant Party Mode config entities."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        mass: MusicAssistantClient,
+        coordinator: DataUpdateCoordinator[ProviderConfig],
+        instance_id: str,
+        unique_id_suffix: str,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize MusicAssistantPartyModeConfigEntity."""
+        super().__init__(coordinator, **kwargs)
+        self.mass = mass
+        self.instance_id = instance_id
+        assert mass.server_info is not None
+        server_id = mass.server_info.server_id
+        self._attr_device_info = get_party_device_info(server_id, instance_id)
+        self._attr_unique_id = (
+            f"{get_party_device_id(server_id, instance_id)}_{unique_id_suffix}"
+        )
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self._handle_coordinator_update()
