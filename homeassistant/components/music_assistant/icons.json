@@ -83,6 +83,14 @@
       "party_mode_show_progress_bar": {
         "default": "mdi:progress-clock"
       }
+    },
+    "text": {
+      "party_mode_party_name": {
+        "default": "mdi:rename-box"
+      },
+      "party_mode_qr_text": {
+        "default": "mdi:text-box"
+      }
     }
   },
   "services": {
