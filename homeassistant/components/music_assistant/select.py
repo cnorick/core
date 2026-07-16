@@ -1,17 +1,23 @@
 """Music Assistant select platform."""
 
-from typing import Final, override
+from typing import Any, Final, override
 
 from music_assistant_client.client import MusicAssistantClient
+from music_assistant_models.enums import EventType
+from music_assistant_models.event import MassEvent
 from music_assistant_models.player import PlayerOption, PlayerOptionType
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
-from homeassistant.const import Platform
+from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import MusicAssistantConfigEntry
-from .entity import MusicAssistantPlayerOptionEntity
+from .const import LOGGER
+from .entity import (
+    MusicAssistantPartyModeConfigEntity,
+    MusicAssistantPlayerOptionEntity,
+)
 from .helpers import catch_musicassistant_error
 
 PLAYER_OPTIONS_SELECT: Final[dict[str, bool]] = {
@@ -24,6 +30,29 @@ PLAYER_OPTIONS_SELECT: Final[dict[str, bool]] = {
     "sleep": False,
     "surround_decoder_type": False,
     "tone_control_mode": True,
+}
+
+PARTY_MODE_SELECTS = {
+    "player": None,
+    "request_badge_color": EntityCategory.CONFIG,
+    "boost_badge_color": EntityCategory.CONFIG,
+}
+
+BADGE_COLORS = {
+    "2d6a4f": "#2D6A4F",
+    "b55522": "#B55522",
+    "e91e63": "#E91E63",
+    "f06292": "#F06292",
+    "9c27b0": "#9C27B0",
+    "673ab7": "#673AB7",
+    "3f51b5": "#3F51B5",
+    "00bcd4": "#00BCD4",
+    "009688": "#009688",
+    "4caf50": "#4CAF50",
+    "8bc34a": "#8BC34A",
+    "e64a19": "#E64A19",
+    "ffc107": "#FFC107",
+    "ffeb3b": "#FFEB3B",
 }
 
 
@@ -80,6 +109,35 @@ async def async_setup_entry(
     # register callback to add players when they are discovered
     entry.runtime_data.platform_handlers.setdefault(Platform.SELECT, add_player)
 
+    def add_party_mode(instance_id: str) -> None:
+        async def _add_entities() -> None:
+            entities: list[MusicAssistantPartyModeSelect] = []
+            if party_config := await mass.config.get_provider_config(instance_id):
+                for select_key, category in PARTY_MODE_SELECTS.items():
+                    if select_key not in party_config.values:
+                        continue
+
+                    entities.append(
+                        MusicAssistantPartyModeSelect(
+                            mass,
+                            entry.runtime_data.party_config_coordinator,
+                            instance_id,
+                            config_key=select_key,
+                            entity_description=SelectEntityDescription(
+                                key=f"party_mode_{select_key}",
+                                translation_key=f"party_mode_{select_key}"
+                                if select_key != "player"
+                                else "party_mode_party_player",
+                                entity_category=category,
+                            ),
+                        )
+                    )
+            async_add_entities(entities)
+
+        hass.create_task(_add_entities())
+
+    entry.runtime_data.party_handlers.setdefault(Platform.SELECT, add_party_mode)
+
 
 class MusicAssistantPlayerConfigSelect(MusicAssistantPlayerOptionEntity, SelectEntity):
     """Representation of a select entity to control player settings."""
@@ -126,4 +184,109 @@ class MusicAssistantPlayerConfigSelect(MusicAssistantPlayerOptionEntity, SelectE
             self._option_key_to_translation_key_mapping.get(player_option.value)
             if isinstance(player_option.value, str)
             else None
+        )
+
+
+class MusicAssistantPartyModeSelect(MusicAssistantPartyModeConfigEntity, SelectEntity):
+    """Representation of a select entity to control party mode settings."""
+
+    def __init__(
+        self,
+        mass: MusicAssistantClient,
+        coordinator: Any,
+        instance_id: str,
+        config_key: str,
+        entity_description: SelectEntityDescription,
+    ) -> None:
+        """Initialize."""
+        super().__init__(
+            mass=mass,
+            coordinator=coordinator,
+            instance_id=instance_id,
+            unique_id_suffix=config_key,
+        )
+        self.config_key = config_key
+        self.entity_description = entity_description
+        self._attr_current_option = None
+        if self.config_key != "player":
+            self._attr_options = list(BADGE_COLORS.keys())
+        else:
+            self._attr_options = []
+        self._option_name_to_id: dict[str, str] = {}
+        self._option_id_to_name: dict[str, str] = {}
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Register callbacks."""
+        await super().async_added_to_hass()
+        if self.config_key == "player":
+            self.async_on_remove(
+                self.mass.subscribe(
+                    self._on_player_update,
+                    (
+                        EventType.PLAYER_ADDED,
+                        EventType.PLAYER_REMOVED,
+                        EventType.PLAYER_UPDATED,
+                    ),
+                )
+            )
+
+    async def _on_player_update(self, event: MassEvent) -> None:
+        """Call when we receive an event from MusicAssistant."""
+        self._handle_coordinator_update()
+
+    @override
+    def _handle_coordinator_update(self) -> None:
+        """Update select state."""
+        if not (party_config := self.coordinator.data):
+            self._attr_available = False
+            super()._handle_coordinator_update()
+            return
+
+        try:
+            if self.config_key == "player":
+                players = sorted(
+                    self.mass.players,
+                    key=lambda p: p.name.lower(),
+                )
+                self._option_name_to_id = {"Auto": "auto"}
+                self._option_id_to_name = {"auto": "Auto"}
+                for p in players:
+                    self._option_name_to_id[p.name] = p.player_id
+                    self._option_id_to_name[p.player_id] = p.name
+                self._attr_options = list(self._option_name_to_id.keys())
+
+            value = party_config.get_value(self.config_key)
+            if self.config_key == "player":
+                self._attr_current_option = self._option_id_to_name.get(
+                    str(value), "Auto"
+                )
+            elif value and isinstance(value, str):
+                # value is hex, strip the "#" and lowercase it
+                self._attr_current_option = value.replace("#", "").lower()
+            self._attr_available = True
+        except Exception as err:  # noqa: BLE001
+            LOGGER.debug("Error in select update: %s", err)
+            self._attr_available = False
+
+        super()._handle_coordinator_update()
+
+    @catch_musicassistant_error
+    @override
+    async def async_select_option(self, option: str) -> None:
+        """Select an option."""
+        if self.config_key == "player":
+            value = self._option_name_to_id.get(option, "auto")
+        else:
+            value = BADGE_COLORS[option]
+
+        LOGGER.debug(
+            "Setting select %s to %s for %s", self.config_key, value, self.instance_id
+        )
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self.mass.config.save_provider_config(
+            provider_domain="party",
+            instance_id=self.instance_id,
+            values={self.config_key: value},
         )
